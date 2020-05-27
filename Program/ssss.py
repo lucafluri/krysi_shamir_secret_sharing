@@ -24,13 +24,13 @@ from progress.bar import Bar
 
 #Console and Usage Info
 p = argparse.ArgumentParser(description='A Python implementation of Shamirs Secret Sharing Algorithm.', usage='EXAMPLE: python ssss.py -g 3 5 123456789 or python ssss.py -c 3 283739342c202d3237333629 283538392c202d3137313129 283433312c202d39323129', argument_default=argparse.SUPPRESS)
-p.add_argument("-g", "--generate", nargs=3, help="Generate Mode, Usage: -g k n s, where k is the treshold, n the number of keys generated and s the secret")
-p.add_argument("-c", "--construct", nargs="+", help="Construct Mode, Usage: -c k s0 s1 s2 ... sn, where k is the treshold and s0 to sn are the keys passed in")
+p.add_argument("-g", "--generate", nargs=3, help="Generate Shares, Usage: -g k n s, where k is the treshold, n the number of keys generated and s the secret")
+p.add_argument("-c", "--construct", nargs="+", help="Construct Secret from Shares, Usage: -c k s0 s1 s2 ... sn, where k is the treshold and s0 to sn are the keys passed in")
 p.add_argument("-gr", "--graph", nargs=1, help="Enables Plots, Usage: -gr 0|1")
 args = p.parse_args()
 
 
-max = 100
+max = 10000
 
 # Polyfit precision is too low and valuespace to small to encrypt int repr. of strings => Split up
 # Currently only ints with max. 20 digits decode correctly.
@@ -52,11 +52,20 @@ def generateKeys(k, n, s):
     s = int(s)
     # print("int: ", s)
 
-    x = ([0] + [randint(1, max) for _ in range(k-1)]) #Generate 0 + k-1 random for interpolating random curve
+    x = [0]#([0] + [randint(1, max) for _ in range(k-1)]) #Generate 0 + k-1 random for interpolating random curve
+    for _ in range(k-1): #Avoid duplicate x values
+        rand = randint(1, max)
+        while(x.__contains__(rand)):
+            rand = randint(1, max)
+        x.append(rand)
     
     # x.sort()
     y = [s] + [randint(1, max) for _ in range(k-1)] #Generate secret +  k-1 random for interpolating random curve
-
+    # for _ in range(k-1):
+    #     rand = randint(1, max)
+    #     while(y.__contains__(rand)):
+    #         rand = randint(1, max)
+    #     y.append(rand)
     # print(x, y)
 
 
@@ -170,7 +179,7 @@ elif(args.__contains__("construct")): # Construct Mode
     s_n = args.construct[1:]
 
     print("k: ", k)
-    print("s_n: ", s_n)
+    # print("s_n: ", s_n)
     
     secret, x_d, y_d, x1_d, y1_d = constructSecret(k, s_n)
     print("SECRET: ", secret)
@@ -179,46 +188,42 @@ elif(args.__contains__("construct")): # Construct Mode
             plt.plot(x1_d, y1_d, "g")
             plt.show()
 
+else:
+    #Tests
+    def test():
+        print("TESTING")
+        # i = 12345678 => 0.2% chance for numerical error
+        # i = 1234567 => 0.04% chance for numerical error
+        # i = 123456 => 0.0% chance for numerical error
+        # i = 12345 => 0.0% chance for numerical error
+
+        maxI = 12345678
+        duration = 200
+        errors = 0
+
+        bar = Bar("Testing ", max = duration)
+        for i in range(maxI-duration, maxI):
+            i = 123456789
+            keys, asString, x, y, keys_x, keys_y, x1, y1 = generateKeys(6, 10, i)
+            secret, x_d, y_d, x1_d, y1_d = constructSecret(6, keys)
+            # print(i, secret)
+            suc = i == secret
+
+            bar.next()
+            if(not suc):
+                errors += 1 
+                print("ERROR", i, secret, y1[0])
 
 
 
+                plt.plot(x, y, "ro")
+                plt.plot(x1, y1, "r")
+                plt.plot(keys_x, keys_y, "r+")
+                plt.plot(x_d, y_d, "g+")
+                plt.plot(x1_d, y1_d, "g")
+                plt.show()
+                break
+        bar.finish()
+        print(round(errors/duration * 100, 4), "% Errors")
 
-
-
-#Tests
-def test():
-    # i = 12345678 => 0.2% chance for numerical error
-    # i = 1234567 => 0.04% chance for numerical error
-    # i = 123456 => 0.0% chance for numerical error
-    # i = 12345 => 0.0% chance for numerical error
-
-    maxI = 12345678
-    duration = 2000
-    errors = 0
-
-    bar = Bar("Testing ", max = duration)
-    for i in range(maxI-duration, maxI):
-        i = 1234567
-        keys, asString, x, y, keys_x, keys_y, x1, y1 = generateKeys(6, 10, i)
-        secret, x_d, y_d, x1_d, y1_d = constructSecret(6, keys)
-        # print(i, secret)
-        suc = i == secret
-
-        bar.next()
-        if(not suc):
-            errors += 1 
-            print("ERROR", i, secret, y1[0])
-
-
-
-            # plt.plot(x, y, "ro")
-            # plt.plot(x1, y1, "r")
-            # plt.plot(keys_x, keys_y, "r+")
-            # plt.plot(x_d, y_d, "g+")
-            # plt.plot(x1_d, y1_d, "g")
-            # plt.show()
-            # break
-    bar.finish()
-    print(round(errors/duration * 100, 4), "% Errors")
-
-# test()
+    test()
