@@ -8,16 +8,12 @@ krysi @FHNW FS20
 To install Dependencies:
 pip install numpy matplotlib progress
 
-
-
-TODO Recalculate new key with k shares
 """
 import numpy as np
 import matplotlib.pyplot as plt
 from random import randint
 import sys
 import argparse
-import struct
 from progress.bar import Bar
 
 
@@ -30,87 +26,57 @@ p.add_argument("-gr", "--graph", nargs=1, help="Enables Plots, Usage: -gr 0|1")
 args = p.parse_args()
 
 
-max = 10000
+max = int(1e5)
 
 # Polyfit precision is too low and valuespace to small to encrypt int repr. of strings => Split up
-# Currently only ints with max. 20 digits decode correctly.
-def str2int(s):
-    return int(s.encode().hex(), 16)
+# Currently only ints with max. 20 digits decode without rounding errors.
 
-def int2str(i):
-    return bytes.fromhex(hex(i)[2:]).decode()
-
-def float2int(f):
-    return int(round(np.longdouble(f)))
-
-
-"""
+""" 
 Generates n keys of the k, n scheme with secret s
 """
 def generateKeys(k, n, s):
-    # s = str2int(s)
     s = int(s)
-    # print("int: ", s)
 
-    x = [0]#([0] + [randint(1, max) for _ in range(k-1)]) #Generate 0 + k-1 random for interpolating random curve
-    for _ in range(k-1): #Avoid duplicate x values
-        rand = randint(1, max)
-        while(x.__contains__(rand)):
+    decodable = False
+
+    while(not decodable):
+        x = [0]
+        for _ in range(k-1): #Avoid duplicate x values
             rand = randint(1, max)
-        x.append(rand)
-    
-    # x.sort()
-    y = [s] + [randint(1, max) for _ in range(k-1)] #Generate secret +  k-1 random for interpolating random curve
-    # for _ in range(k-1):
-    #     rand = randint(1, max)
-    #     while(y.__contains__(rand)):
-    #         rand = randint(1, max)
-    #     y.append(rand)
-    # print(x, y)
+            while(x.__contains__(rand)):
+                rand = randint(1, max)
+            x.append(rand)
+        
+        y = [s] + [randint(1, max) for _ in range(k-1)] #Generate secret +  k-1 random for interpolating random curve        
 
+        p = np.polyfit(x,y,k-1) # Last argument is degree of polynomial
+        # print(p) #Calculated Polynomial Coefficient
+        f = np.poly1d(p) # So we can call f(x)
 
-    
-
-    p = np.polyfit(x,y,k-1) # Last argument is degree of polynomial
-    # print(p) #Calculated Polynomial Coefficient
-
-    f = np.poly1d(p) # So we can call f(x)
-
-
-    
-
-    keys = []
-    keys_x = []
-    keys_y = []
-    asString = ""
-    for i in range(n):
-        x_ = randint(1, max)
-        while(keys_x.__contains__(x_)): #Avoid duplicates!
+        keys = []
+        keys_x = []
+        keys_y = []
+        asString = ""
+        for i in range(n):
             x_ = randint(1, max)
-        keys_x.append(x_)
-        keys_y.append(f(x_))
-        t = (x_, f(x_))
-        # if(args.__contains__("graph") and int(args.graph[0])): plt.plot(x_, f(x_), "go")
-        # print(t)
-        t = str(t).encode().hex()
-        keys.append(t)
-        asString += t + " "
-        # print(t)
+            while(keys_x.__contains__(x_)): #Avoid duplicates!
+                x_ = randint(1, max)
+            keys_x.append(x_)
+            keys_y.append(f(x_))
+            t = (x_, f(x_))
+            t = str(t).encode().hex()
+            keys.append(t)
+            asString += t + " "
 
-    # if(args.__contains__("graph") and int(args.graph[0])):
-    # plt.plot(x, y, "b+")
-    x1 = [i for i in range(max)]
-    y1 = [f(x) for x in range(max)]
-        # plt.plot(x1, y1, "r")
 
-        # plt.show()
-
-    
-
-    # print("ALL: ", asString)
-
+        x1 = [i for i in range(max)]
+        y1 = [f(x) for x in range(max)]
+        
+        if(constructSecret(k, keys)[0] == s): decodable = True
 
     return keys, asString, x, y, keys_x, keys_y, x1, y1 #as hex representation of string from of tuples (x, f(x))
+
+
 
 def constructSecret(k, sArray):
     if(len(sArray)<k): return None
@@ -122,35 +88,24 @@ def constructSecret(k, sArray):
     
     for s in sArray[:k]:
         s = bytes.fromhex(s).decode()
-        # print("from hex: ", s)
         t = tuple(map(lambda x: float(np.longdouble(x)), s.replace("(", "").replace(")", "").split(", ")))
-        # print("converted", t) #Correct
         keys.append(t)
         x.append(t[0])
         y.append(t[1])
 
-    # print(x, y)
 
     p = np.polyfit(x,y,k-1)          # Last argument is degree of polynomial
     # print("Coeff_dec: ", p) #Calculated Polynomial Coefficient
 
     f = np.poly1d(p)                # So we can call f(x)
 
-
-    # if(args.__contains__("graph") and int(args.graph[0])):
-    #     plt.plot(x, y, "go")
     x1 = [i for i in range(max)]
     y1 = [f(x) for x in range(max)]
-        # plt.plot(x1, y1, "r")
-
-        # plt.show()
-
-    # print(p[-1])
+        
     i = int(round(p[-1]))
-    # print(i)
     return i, x, y, x1, y1
-    # return int2str(i)
-    # return int2str(int(round(p[-1])))
+
+
 
 
 if(args.__contains__("generate")): # Generate Mode
@@ -169,7 +124,7 @@ if(args.__contains__("generate")): # Generate Mode
     if(args.__contains__("graph") and int(args.graph[0])):
             plt.plot(x, y, "ro")
             plt.plot(x1, y1, "r")
-            plt.plot(keys_x, keys_y, "r+")
+            plt.plot(keys_x, keys_y, "go")
             plt.show()
 
 elif(args.__contains__("construct")): # Construct Mode
@@ -179,12 +134,11 @@ elif(args.__contains__("construct")): # Construct Mode
     s_n = args.construct[1:]
 
     print("k: ", k)
-    # print("s_n: ", s_n)
     
     secret, x_d, y_d, x1_d, y1_d = constructSecret(k, s_n)
     print("SECRET: ", secret)
     if(args.__contains__("graph") and int(args.graph[0])):
-            plt.plot(x_d, y_d, "g+")
+            plt.plot(x_d, y_d, "go")
             plt.plot(x1_d, y1_d, "g")
             plt.show()
 
@@ -192,10 +146,6 @@ else:
     #Tests
     def test():
         print("TESTING")
-        # i = 12345678 => 0.2% chance for numerical error
-        # i = 1234567 => 0.04% chance for numerical error
-        # i = 123456 => 0.0% chance for numerical error
-        # i = 12345 => 0.0% chance for numerical error
 
         maxI = 12345678
         duration = 200
